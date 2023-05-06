@@ -1,0 +1,274 @@
+[
+    {
+        "id": "db3530dd7d4087b4",
+        "type": "ui_date_picker",
+        "z": "7e9c18a3436f7b74",
+        "name": "",
+        "label": "",
+        "group": "f313b6c63ffd8e4b",
+        "order": 6,
+        "width": 6,
+        "height": 1,
+        "passthru": true,
+        "topic": "topic",
+        "topicType": "msg",
+        "x": 1370,
+        "y": 900,
+        "wires": [
+            [
+                "d867affcd7e4fa7d"
+            ]
+        ]
+    },
+    {
+        "id": "a78e61b061ee17a0",
+        "type": "ui_text",
+        "z": "7e9c18a3436f7b74",
+        "group": "f313b6c63ffd8e4b",
+        "order": 5,
+        "width": 6,
+        "height": 1,
+        "name": "",
+        "label": "Прогнозований баланс кредитного відділу на дату",
+        "format": "",
+        "layout": "row-spread",
+        "x": 1500,
+        "y": 840,
+        "wires": []
+    },
+    {
+        "id": "cb62561fdc40ae3b",
+        "type": "ui_text",
+        "z": "7e9c18a3436f7b74",
+        "group": "f313b6c63ffd8e4b",
+        "order": 7,
+        "width": 6,
+        "height": 1,
+        "name": "SUM",
+        "label": "",
+        "format": "{{msg.payload[0].sum}} грн",
+        "layout": "row-left",
+        "x": 2030,
+        "y": 900,
+        "wires": []
+    },
+    {
+        "id": "d867affcd7e4fa7d",
+        "type": "function",
+        "z": "7e9c18a3436f7b74",
+        "name": "FUTURE BALANCE QUERY",
+        "func": "let date = new Date(msg.payload);\nconst sqlDate = date.toISOString().slice(0, 19).replace('T', ' ');\n\nconst balanceQuery = `\nSELECT SUM(payment_sum) AS sum\nFROM credit_lines \nWHERE date <= '${sqlDate}'; \n`\n\nmsg.topic = balanceQuery;\n\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1620,
+        "y": 900,
+        "wires": [
+            [
+                "c27b37bb127c412a"
+            ]
+        ]
+    },
+    {
+        "id": "c27b37bb127c412a",
+        "type": "mysql",
+        "z": "7e9c18a3436f7b74",
+        "mydb": "4a261eb44f2c21ef",
+        "name": "",
+        "x": 1860,
+        "y": 900,
+        "wires": [
+            [
+                "cb62561fdc40ae3b"
+            ]
+        ]
+    },
+    {
+        "id": "282a9744d7c7d4fd",
+        "type": "ui_text",
+        "z": "7e9c18a3436f7b74",
+        "group": "c12dd41923addcc4",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Прибуток кредитного відділу",
+        "format": "{{msg.payload[0][0].profit?msg.payload[0][0].profit:0}}",
+        "layout": "row-spread",
+        "x": 2190,
+        "y": 1020,
+        "wires": []
+    },
+    {
+        "id": "6aed05dcad1f6055",
+        "type": "ui_date_picker",
+        "z": "7e9c18a3436f7b74",
+        "name": "",
+        "label": "",
+        "group": "c12dd41923addcc4",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "passthru": true,
+        "topic": "topic",
+        "topicType": "msg",
+        "x": 1370,
+        "y": 1020,
+        "wires": [
+            [
+                "3bca2aaac91b7b47"
+            ]
+        ]
+    },
+    {
+        "id": "faeae68b1401a559",
+        "type": "ui_text",
+        "z": "7e9c18a3436f7b74",
+        "group": "c12dd41923addcc4",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Витрати депозитного відділу",
+        "format": "{{msg.payload[1][0].summary.toFixed(2)}}",
+        "layout": "row-spread",
+        "x": 2190,
+        "y": 1060,
+        "wires": []
+    },
+    {
+        "id": "3bca2aaac91b7b47",
+        "type": "function",
+        "z": "7e9c18a3436f7b74",
+        "name": "OVERALL BANK QUERY",
+        "func": "let date = new Date(msg.payload);\nconst sqlDate = date.toISOString().slice(0, 19).replace('T', ' ');\n\nconst creditProfit = `\nSELECT SUM(result) AS profit\nFROM (SELECT SUM(payment_sum) - body AS result\n\tFROM credit_lines INNER JOIN credit_active USING(id_active_credo)\n\tGROUP BY id_active_credo\n    HAVING MAX(date) <= '${sqlDate}') que;\n`\n\nconst depoPaymentsQuery = `\n    SELECT SUM(\n    IF(\n        id_deposit = 1, \n        IF(\n            DATEDIFF('${sqlDate}', date_start) >= termin * 90,\n            (sum*(percentage * termin)/100),\n            0\n        ), -- close the inner IF statement and add a closing bracket\n        IF(\n            id_deposit = 2,\n            IF(\n                FLOOR(DATEDIFF('${sqlDate}', date_start)/90) > termin,\n                sum*(percentage * termin)/100, \n                sum*(percentage * FLOOR(DATEDIFF('${sqlDate}', date_start)/90 ) /100) \n            ),\n         IF(\n            id_deposit = 3,\n            IF(\n                FLOOR(DATEDIFF('${sqlDate}', date_start)/90) > termin,\n                ROUND(sum * POWER(1 + (percentage/100), termin), 2) - sum, \n                ROUND(sum * POWER(1 + (percentage/100), FLOOR(DATEDIFF('${sqlDate}', date_start)/90)), 2) - sum\n            ), 'no' )\n        ) -- close the outer IF statement and add a closing bracket\n    ) \n    )AS summary\n    FROM active \n    INNER JOIN deposit USING(id_deposit)\n    INNER JOIN client USING(id_client);\n`\n\nconst sumDepoquery = \n`\nSELECT SUM(sum) AS depo\nFROM active\nWHERE DATE_ADD(date_start, INTERVAL 3*termin MONTH) >= '${sqlDate}';\n`\n\nconst sumCreditQuery = \n`\nSELECT SUM(body) AS cred\nFROM credit_active\nWHERE DATE_ADD(date_start, INTERVAL 3*termin MONTH) >= '${sqlDate}';\n`\n\nconst pureProfitQuery = \n`\nSELECT IFNULL(profit,0) - IFNULL(loss,0) AS res\nFROM (SELECT SUM(result) AS profit\nFROM (SELECT SUM(payment_sum) - body AS result\n\tFROM credit_lines INNER JOIN credit_active USING(id_active_credo)\n\tGROUP BY id_active_credo\n    HAVING MAX(date) <= '${sqlDate}') cred ) cred,\n(SELECT SUM(\n    IF(\n        id_deposit = 1, \n        IF(\n            DATEDIFF('${sqlDate}', date_start) >= termin * 90,\n            (sum*(percentage * termin)/100),\n            0\n        ), \n        IF(\n            id_deposit = 2,\n            IF(\n                FLOOR(DATEDIFF('${sqlDate}', date_start)/90) > termin,\n                sum*(percentage * termin)/100, \n                sum*(percentage * FLOOR(DATEDIFF('${sqlDate}', date_start)/90 ) /100) \n            ),\n         IF(\n            id_deposit = 3,\n            IF(\n                FLOOR(DATEDIFF('${sqlDate}', date_start)/90) > termin,\n                ROUND(sum * POWER(1 + (percentage/100), termin), 2) - sum, \n                ROUND(sum * POWER(1 + (percentage/100), FLOOR(DATEDIFF('${sqlDate}', date_start)/90)), 2) - sum\n            ), 'no' )\n        ) \n    ) \n    )AS loss\n    FROM active \n    INNER JOIN deposit USING(id_deposit)\n    INNER JOIN client USING(id_client)) deposit;\n`\n\nmsg.topic = creditProfit + depoPaymentsQuery + sumDepoquery + sumCreditQuery + pureProfitQuery;\n\nreturn msg;\n\n\n\n// дописати запит на на виведення сумарної кількості депо по даті ",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1610,
+        "y": 1020,
+        "wires": [
+            [
+                "866b2e94531048b2"
+            ]
+        ]
+    },
+    {
+        "id": "866b2e94531048b2",
+        "type": "mysql",
+        "z": "7e9c18a3436f7b74",
+        "mydb": "4a261eb44f2c21ef",
+        "name": "",
+        "x": 1840,
+        "y": 1020,
+        "wires": [
+            [
+                "282a9744d7c7d4fd",
+                "faeae68b1401a559",
+                "920459bc08177bf0",
+                "80ddfa3c41bb9615",
+                "4afacf0787df35f9"
+            ]
+        ]
+    },
+    {
+        "id": "920459bc08177bf0",
+        "type": "ui_text",
+        "z": "7e9c18a3436f7b74",
+        "group": "c12dd41923addcc4",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Сумарні депози клієнтів",
+        "format": "{{msg.payload[2][0].depo}}",
+        "layout": "row-spread",
+        "x": 2170,
+        "y": 1100,
+        "wires": []
+    },
+    {
+        "id": "80ddfa3c41bb9615",
+        "type": "ui_text",
+        "z": "7e9c18a3436f7b74",
+        "group": "c12dd41923addcc4",
+        "order": 4,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Сумарно кредитів надано на",
+        "format": "{{msg.payload[3][0].cred}}",
+        "layout": "row-spread",
+        "x": 2190,
+        "y": 1140,
+        "wires": []
+    },
+    {
+        "id": "4afacf0787df35f9",
+        "type": "ui_text",
+        "z": "7e9c18a3436f7b74",
+        "group": "c12dd41923addcc4",
+        "order": 5,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Чистий прибуток банку",
+        "format": "{{msg.payload[4][0].res.toFixed(2)}}",
+        "layout": "row-spread",
+        "x": 2170,
+        "y": 1180,
+        "wires": []
+    },
+    {
+        "id": "f313b6c63ffd8e4b",
+        "type": "ui_group",
+        "name": "Кредитний календар",
+        "tab": "c019f24713288347",
+        "order": 8,
+        "disp": true,
+        "width": 18,
+        "collapse": false
+    },
+    {
+        "id": "4a261eb44f2c21ef",
+        "type": "MySQLdatabase",
+        "name": "",
+        "host": "localhost",
+        "port": "8889",
+        "db": "deposit",
+        "tz": "",
+        "charset": "UTF8"
+    },
+    {
+        "id": "c12dd41923addcc4",
+        "type": "ui_group",
+        "name": "Оберіть дату",
+        "tab": "4d0d3d4fd60a1b28",
+        "order": 1,
+        "disp": true,
+        "width": "6",
+        "collapse": false
+    },
+    {
+        "id": "c019f24713288347",
+        "type": "ui_tab",
+        "name": "Кредитний відділ",
+        "icon": "dashboard",
+        "order": 5,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "4d0d3d4fd60a1b28",
+        "type": "ui_tab",
+        "name": "Фін. діяльність банку",
+        "icon": "dashboard",
+        "order": 10,
+        "disabled": false,
+        "hidden": false
+    }
+]
